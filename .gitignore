@@ -1,0 +1,11 @@
+# Runtime artifacts (GUARDRAILS.md section 3.2) - everything the tool produces
+logs/
+backups/
+reports/
+state/
+downloads/
+.work/
+
+# Python
+__pycache__/
+*.pyc

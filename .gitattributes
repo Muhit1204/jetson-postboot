@@ -1,0 +1,2 @@
+# Repo targets Linux (Jetson); keep LF everywhere regardless of dev OS.
+* text=auto eol=lf

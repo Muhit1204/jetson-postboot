@@ -1,0 +1,7 @@
+{
+  "board": "orin-nano-8gb",
+  "captured": null,
+  "note": "Placeholder awaiting hardware capture by Munta. See CAPTURE.md in this directory. Empty maps mean simulate mode answers zero commands; any lookup raises, which is the fixture-completeness guarantee.",
+  "commands": {},
+  "files": {}
+}

@@ -13,7 +13,10 @@
     "nvcc --version": {"stdout": "nvcc-version.txt", "returncode": 127},
     "dpkg -l": "dpkg-cudnn.txt",
     "sudo nvpmodel -q": "nvpmodel-q.txt",
-    "which ollama": {"stdout": "which-ollama.txt", "returncode": 1}
+    "which ollama": {"stdout": "which-ollama.txt", "returncode": 1},
+    "blkid -U 52d10c20-4c4e-4ea4-8a00-d5ccdc19c122": "blkid-uuid-root.txt",
+    "which efibootmgr": "which-efibootmgr.txt",
+    "efibootmgr": "efibootmgr.txt"
   },
   "files": {
     "/etc/nv_tegra_release": "nv_tegra_release.txt",

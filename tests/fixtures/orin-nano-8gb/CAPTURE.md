@@ -100,3 +100,17 @@ returncodes came from.
 Derived variants (low-MemAvailable, partition-after-root, root-on-SD,
 root-mismatch) are Phase 1/2 work: they will be created by copying this set
 and editing single values, each documented in its own folder.
+
+## Phase 1 additions (captured 2026-07-05, on the board, unprivileged)
+
+Three entries beyond the original list, needed by boot_advisor:
+
+```bash
+blkid -U <root-uuid-from-extlinux> > blkid-uuid-root.txt
+which efibootmgr > which-efibootmgr.txt; echo $? > which-efibootmgr.rc
+efibootmgr > efibootmgr.txt
+```
+
+The blkid manifest key embeds this board's actual root UUID because the
+tool constructs the command from the UUID it parses out of extlinux.conf;
+simulate-mode key equality then proves the parse was right.

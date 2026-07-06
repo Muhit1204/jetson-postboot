@@ -8,6 +8,7 @@ import contextlib
 import io
 import json
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import postboot
@@ -29,26 +30,23 @@ class PostbootCliTests(unittest.TestCase):
         code = postboot.main(list(argv), stdout=out, stderr=err, root=self.work)
         return code, out.getvalue(), err.getvalue()
 
-    def test_simulate_empty_fixture_produces_clean_report(self):
-        code, out, err = self.run_cli("--simulate", str(self.fixture))
-        self.assertEqual(code, 0, err)
-        self.assertIn("jetson-postboot", out)
-        self.assertIn("mode: simulate", out)
-        self.assertIn("summary: 0 pass, 0 warn, 0 action", out)
+    def test_simulate_empty_fixture_fails_fixture_completeness(self):
+        # Phase 1+: checks run for real, so an empty manifest must raise
+        # SimulationMissError (GUARDRAILS 5.3 fixture completeness), not
+        # render an empty report as it did in Phase 0.
+        code, _out, err = self.run_cli("--simulate", str(self.fixture))
+        self.assertEqual(code, 2)
+        self.assertIn("no fixture entry", err)
 
     def test_simulate_writes_report_files(self):
-        self.run_cli("--simulate", str(self.fixture))
+        base = Path(__file__).resolve().parent / "fixtures" / "orin-nano-8gb"
+        self.run_cli("--simulate", str(base))
         reports = self.work / "reports"
         self.assertEqual(len(list(reports.glob("report-*.txt"))), 1)
         json_files = list(reports.glob("report-*.json"))
         self.assertEqual(len(json_files), 1)
         data = json.loads(json_files[0].read_text(encoding="utf-8"))
-        self.assertEqual(data["findings"], [])
-
-    def test_real_mode_phase0_runs_without_commands(self):
-        code, out, _err = self.run_cli()
-        self.assertEqual(code, 0)
-        self.assertIn("mode: real", out)
+        self.assertTrue(data["findings"])
 
     def test_apply_not_implemented_yet(self):
         code, _out, err = self.run_cli(
@@ -86,8 +84,9 @@ class PostbootCliTests(unittest.TestCase):
         self.assertEqual(code, 2)
 
     def test_dry_run_flag_reflected_in_mode(self):
-        code, out, _err = self.run_cli("--simulate", str(self.fixture), "--dry-run")
-        self.assertEqual(code, 0)
+        base = Path(__file__).resolve().parent / "fixtures" / "orin-nano-8gb"
+        code, out, _err = self.run_cli("--simulate", str(base), "--dry-run")
+        self.assertEqual(code, 1)  # findings on the captured board
         self.assertIn("mode: simulate+dry-run", out)
 
 
@@ -111,7 +110,7 @@ class CheckRegistryTests(unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def test_action_finding_drives_exit_one(self):
-        def stub(runner, report):
+        def stub(runner, report, ctx):
             report.add(LEVEL_ACTION, "stub", "needs work")
 
         with mock.patch.object(postboot, "_CHECKS", [("stub", stub)]):
@@ -122,7 +121,7 @@ class CheckRegistryTests(unittest.TestCase):
         self.assertIn("needs work", out)
 
     def test_check_reads_through_simulate_runner(self):
-        def stub(runner, report):
+        def stub(runner, report, ctx):
             result = runner.run(["zramctl", "--bytes"])
             report.add(LEVEL_PASS, "stub", result.stdout)
 
@@ -131,14 +130,63 @@ class CheckRegistryTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("payload-zram", out)
 
+    def test_checks_receive_context_with_backups_dir(self):
+        seen = {}
+
+        def stub(runner, report, ctx):
+            seen.update(ctx)
+
+        with mock.patch.object(postboot, "_CHECKS", [("stub", stub)]):
+            self.run_cli("--simulate", str(self.fixture))
+        self.assertEqual(seen["backups_dir"], self.work / "backups")
+
     def test_simulation_miss_in_check_exits_two(self):
-        def stub(runner, report):
+        def stub(runner, report, ctx):
             runner.run(["findmnt", "-no", "SOURCE", "/"])
 
         with mock.patch.object(postboot, "_CHECKS", [("stub", stub)]):
             code, _out, err = self.run_cli("--simulate", str(self.fixture))
         self.assertEqual(code, 2)
         self.assertIn("no fixture entry", err)
+
+
+class Phase1IntegrationTests(unittest.TestCase):
+    """PLAN section 8, Phase 1 acceptance against the captured base fixture:
+    swappiness 60 flagged, boot verdict (a), CUDA stack summarized, exit
+    code 1 with findings. The zram-default and reclaimable-space acceptance
+    numbers live in derived-variant tests (test_swap, test_storage) because
+    the captured board is already tuned (PROJECT_CONTEXT O7)."""
+
+    FIXTURE = (Path(__file__).resolve().parent / "fixtures" / "orin-nano-8gb")
+
+    def run_cli(self, *argv):
+        work = make_work_dir(self)
+        out, err = io.StringIO(), io.StringIO()
+        code = postboot.main(list(argv), stdout=out, stderr=err, root=work)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_full_simulate_report_meets_phase1_acceptance(self):
+        code, out, err = self.run_cli("--simulate", str(self.FIXTURE))
+        self.assertEqual(code, 1, err + out)  # findings present
+        # system identity
+        self.assertIn("NVIDIA Jetson Orin Nano", out)
+        self.assertIn("L4T r36.4.7 (JetPack 6.x)", out)
+        self.assertIn("MAXN_SUPER", out)
+        # swap: swappiness 60 flagged as the actionable finding
+        self.assertIn("vm.swappiness is 60", out)
+        self.assertIn("ACTION", out)
+        # storage: this board's root already spans the disk
+        self.assertIn("spans", out)
+        # boot verdict (a)
+        self.assertIn("matches mounted root /dev/nvme0n1p1", out)
+        # CUDA stack summarized
+        self.assertIn("cuda-12.6", out)
+        self.assertIn("libcudnn9-cuda-12", out)
+
+    def test_all_five_modules_report(self):
+        _code, out, _err = self.run_cli("--simulate", str(self.FIXTURE))
+        for module in ("[system]", "[storage]", "[swap]", "[boot]", "[mlstack]"):
+            self.assertIn(module, out)
 
 
 if __name__ == "__main__":

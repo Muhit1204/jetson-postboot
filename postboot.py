@@ -13,8 +13,10 @@ import traceback
 from pathlib import Path
 
 from jetson_postboot import __version__
+from jetson_postboot.checks import system_info
 from jetson_postboot.lib.report import Report
 from jetson_postboot.lib.runner import Runner, RunnerError
+from jetson_postboot.modules import boot_advisor, mlstack, storage, swap
 
 REPO_ROOT = Path(__file__).resolve().parent
 
@@ -25,9 +27,16 @@ _APPLY_PHASE = {"swap": "Phase 2", "mlstack": "Phase 3"}
 _UNDO_PHASE = {"swap": "Phase 2"}
 
 # Tier 0 detection registry: (module name, check callable). Each callable
-# takes (runner, report) and appends findings. Populated as Phase 1 parsers
-# land; empty registry renders a valid empty report.
-_CHECKS = []
+# takes (runner, report, ctx) where ctx carries run-scoped paths the modules
+# may need (currently backups_dir, used by boot_advisor's verdict c).
+_CHECKS = [
+    ("system", lambda r, rep, ctx: system_info.check(r, rep)),
+    ("storage", lambda r, rep, ctx: storage.check(r, rep)),
+    ("swap", lambda r, rep, ctx: swap.check(r, rep)),
+    ("boot", lambda r, rep, ctx: boot_advisor.check(
+        r, rep, backups_dir=ctx["backups_dir"])),
+    ("mlstack", lambda r, rep, ctx: mlstack.check(r, rep)),
+]
 
 
 def build_parser():
@@ -92,8 +101,9 @@ def _dispatch(args, stdout, stderr, root):
             args.undo, _UNDO_PHASE[args.undo]))
         return 2
     report = Report(mode=runner.mode, tool_version=__version__)
+    ctx = {"backups_dir": root / "backups"}
     for _name, check in _CHECKS:
-        check(runner, report)
+        check(runner, report, ctx)
     stdout.write(report.render_text())
     txt_path, json_path = report.save(root / "reports")
     stdout.write("report saved: {}\n".format(txt_path))

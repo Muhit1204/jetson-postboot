@@ -15,6 +15,11 @@ LEVEL_ACTION = "ACTION"
 _LEVELS = (LEVEL_PASS, LEVEL_WARN, LEVEL_ACTION)
 
 
+def human_gib(nbytes):
+    """'7.4 GiB' from a byte count; shared by every module's report text."""
+    return "{:.1f} GiB".format(nbytes / (1024 ** 3))
+
+
 @dataclass
 class Finding:
     level: str

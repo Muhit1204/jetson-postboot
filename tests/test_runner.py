@@ -230,6 +230,19 @@ class RealModeTests(RunnerTestCase):
         self.assertEqual(result.stdout, "payload")
         self.assertEqual(result.mode, "real")
 
+    def test_real_missing_binary_returns_127(self):
+        runner = self.make_runner()
+        with mock.patch.object(
+            runner_mod.subprocess, "run",
+            side_effect=FileNotFoundError(2, "No such file or directory", "nvcc"),
+        ):
+            result = runner.run(["nvcc", "--version"])
+        self.assertEqual(result.returncode, 127)
+        self.assertIn("nvcc", result.stderr)
+        self.assertIn("not found", result.stderr)
+        self.assertEqual(result.mode, "real")
+        self.assertFalse(result.executed)
+
     def test_sudo_prepended_in_real_mode(self):
         runner = self.make_runner()
         fake = types.SimpleNamespace(returncode=0, stdout="", stderr="")

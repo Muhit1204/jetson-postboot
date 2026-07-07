@@ -103,6 +103,15 @@ class CheckTests(unittest.TestCase):
         self.assertNotIn("sgdisk -e", details)  # header already at disk end
         self.assertEqual(report.exit_code(), 1)
 
+    def test_sfdisk_failure_reports_unreadable_table_not_absence(self):
+        report = self.run_check(FIXTURES / "orin-nano-8gb-sfdisk-denied")
+        text = report.render_text()
+        warns = [f for f in report.findings if f.level == LEVEL_WARN]
+        self.assertTrue(
+            any("could not read" in f.message and "sudo: a password is required"
+                in f.message for f in warns), text)
+        self.assertNotIn("not found in", text)
+
     def test_partition_after_root_fails_precondition_no_commands(self):
         report = self.run_check(FIXTURES / "orin-nano-8gb-partition-after-root")
         text = report.render_text()

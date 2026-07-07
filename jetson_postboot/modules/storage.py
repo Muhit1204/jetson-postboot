@@ -149,8 +149,15 @@ def check(runner, report):
                    disk, human_gib(disk_node.get("size", 0)),
                    human_gib(root_node.get("size", 0)), human_gib(fs_size)))
 
-    dump = parse_sfdisk_dump(
-        runner.run(["sfdisk", "-d", disk], sudo=True).stdout)
+    sfdisk = runner.run(["sfdisk", "-d", disk], sudo=True)
+    if sfdisk.returncode != 0:
+        report.add(LEVEL_WARN, "storage",
+                   "could not read the {} partition table (sfdisk -d failed: "
+                   "{}); skipping extend advisory".format(
+                       disk, sfdisk.stderr.strip() or
+                       "rc={}".format(sfdisk.returncode)))
+        return
+    dump = parse_sfdisk_dump(sfdisk.stdout)
     if source not in dump["partitions"]:
         report.add(LEVEL_WARN, "storage",
                    "root partition {} not found in the {} partition table; "

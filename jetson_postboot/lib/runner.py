@@ -268,7 +268,16 @@ class Runner:
         return CommandResult(full, returncode, stdout, stderr, "simulate", False)
 
     def _execute(self, full, command):
-        completed = subprocess.run(full, capture_output=True, text=True, check=False)
+        try:
+            completed = subprocess.run(full, capture_output=True, text=True, check=False)
+        except FileNotFoundError:
+            # Shell convention for command-not-found; lets checks report an
+            # absent optional binary (nvcc, efibootmgr, ...) as a finding
+            # instead of crashing the run.
+            self._log("REAL", command, 127)
+            return CommandResult(full, 127, "",
+                                 "{}: command not found".format(full[0]),
+                                 "real", False)
         self._log("REAL", command, completed.returncode)
         return CommandResult(full, completed.returncode, completed.stdout or "",
                              completed.stderr or "", "real", True)

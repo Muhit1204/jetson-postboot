@@ -1,0 +1,7 @@
+NAME       TYPE      SIZE USED PRIO
+/dev/zram0 partition 649068544 0 5
+/dev/zram1 partition 649068544 0 5
+/dev/zram2 partition 649068544 0 5
+/dev/zram3 partition 649068544 0 5
+/dev/zram4 partition 649068544 0 5
+/dev/zram5 partition 649068544 0 5

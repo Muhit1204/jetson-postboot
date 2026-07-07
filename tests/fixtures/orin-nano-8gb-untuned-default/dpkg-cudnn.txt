@@ -1,0 +1,5 @@
+ii  cudnn-local-tegra-repo-ubuntu2204-9.3.0                  1.0-1                                            arm64        cudnn-local-tegra repository configuration files
+ii  libcudnn9-cuda-12                                        9.3.0.75-1                                       arm64        cuDNN runtime libraries for CUDA 12.6
+ii  libcudnn9-dev-cuda-12                                    9.3.0.75-1                                       arm64        cuDNN development headers and symlinks for CUDA 12.6
+ii  libcudnn9-samples                                        9.3.0.75-1                                       all          cuDNN samples
+ii  libcudnn9-static-cuda-12                                 9.3.0.75-1                                       arm64        cuDNN static libraries for CUDA 12.6

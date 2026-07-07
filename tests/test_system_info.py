@@ -8,7 +8,7 @@ mapping is the static table from PLAN.md 6.2 and is fixture-independent.
 import unittest
 
 from jetson_postboot.checks import system_info
-from jetson_postboot.lib.report import LEVEL_PASS, Report
+from jetson_postboot.lib.report import LEVEL_PASS, LEVEL_WARN, Report
 from jetson_postboot.lib.runner import Runner
 from tests.support import REPO_ROOT, make_work_dir
 
@@ -94,6 +94,18 @@ class CheckTests(unittest.TestCase):
         # identity facts are informational: no WARN/ACTION on this fixture
         self.assertTrue(all(f.level == LEVEL_PASS for f in self.report.findings))
         self.assertEqual(self.report.exit_code(), 0)
+
+    def test_nvpmodel_failure_warns_instead_of_silent_omission(self):
+        # O8 (Munta 2026-07-07): a failed power-mode read is a WARN finding,
+        # never a silently missing line.
+        runner = Runner(log_dir=self.work / "logs",
+                        fixture_dir=FIXTURES.parent / "orin-nano-8gb-sudo-denied")
+        system_info.check(runner, self.report)
+        warns = [f for f in self.report.findings if f.level == LEVEL_WARN]
+        self.assertTrue(
+            any("power mode unknown" in f.message and
+                "sudo: a password is required" in f.message for f in warns),
+            self.report.render_text())
 
     def test_unknown_l4t_release_degrades_to_warning(self):
         # PLAN section 3: unrecognized hardware degrades to detection-only

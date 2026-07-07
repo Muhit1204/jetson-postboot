@@ -114,3 +114,19 @@ efibootmgr > efibootmgr.txt
 The blkid manifest key embeds this board's actual root UUID because the
 tool constructs the command from the UUID it parses out of extlinux.conf;
 simulate-mode key equality then proves the parse was right.
+
+## Phase 2 addition (captured 2026-07-07, on the board, unprivileged)
+
+The swap profile edits /etc/fstab, so simulate mode needs its ground truth:
+
+```bash
+cat /etc/fstab > fstab.txt
+```
+
+manifest.json gains the files entry "/etc/fstab": "fstab.txt".
+
+Phase 2 also adds the S1 apply/undo mutation commands to manifest.json as
+returncode-0/no-stdout entries (sysctl -w for 10 and 60, cp of the staged
+sysctl.d file, rm of that file). Mutation commands print nothing the tool
+parses, so these entries invent no output; they exist because simulate
+mode demands manifest completeness for every issued command (D4).

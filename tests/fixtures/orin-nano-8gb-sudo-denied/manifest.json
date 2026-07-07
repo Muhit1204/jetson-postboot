@@ -21,7 +21,10 @@
       "returncode": 127
     },
     "dpkg -l": "dpkg-cudnn.txt",
-    "sudo nvpmodel -q": "nvpmodel-q.txt",
+    "sudo nvpmodel -q": {
+      "returncode": 1,
+      "stderr": "sudo-denied.txt"
+    },
     "which ollama": {
       "stdout": "which-ollama.txt",
       "returncode": 1

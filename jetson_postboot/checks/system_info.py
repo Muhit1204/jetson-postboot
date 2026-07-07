@@ -88,9 +88,15 @@ def check(runner, report):
                        human_gib(mem.get("SwapTotal", 0))))
 
     mode_result = runner.run(["nvpmodel", "-q"], sudo=True)
-    mode = parse_nvpmodel(mode_result.stdout)
-    if mode:
-        report.add(LEVEL_PASS, "system", "power mode: {}".format(mode))
+    if mode_result.returncode != 0:
+        report.add(LEVEL_WARN, "system",
+                   "power mode unknown (nvpmodel -q failed: {})".format(
+                       mode_result.stderr.strip() or
+                       "rc={}".format(mode_result.returncode)))
+    else:
+        mode = parse_nvpmodel(mode_result.stdout)
+        if mode:
+            report.add(LEVEL_PASS, "system", "power mode: {}".format(mode))
 
     python_result = runner.run(["python3", "--version"])
     report.add(LEVEL_PASS, "system", python_result.stdout.strip())

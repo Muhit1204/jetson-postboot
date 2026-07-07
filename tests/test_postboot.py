@@ -48,13 +48,44 @@ class PostbootCliTests(unittest.TestCase):
         data = json.loads(json_files[0].read_text(encoding="utf-8"))
         self.assertTrue(data["findings"])
 
-    def test_apply_not_implemented_yet(self):
+    UNTUNED = (Path(__file__).resolve().parent / "fixtures" /
+               "orin-nano-8gb-untuned-default")
+
+    def test_apply_swap_dry_run_prints_full_sequence(self):
+        code, out, _err = self.run_cli(
+            "--simulate", str(self.UNTUNED), "--apply", "swap", "--dry-run")
+        self.assertEqual(code, 0, out)
+        for command in ("sudo sysctl -w vm.swappiness=10",
+                        "sudo systemctl disable nvzramconfig.service",
+                        "sudo swapoff /dev/zram0",
+                        "sudo fallocate -l 8G /swapfile",
+                        "sudo chmod 600 /swapfile",
+                        "sudo mkswap /swapfile",
+                        "sudo swapon /swapfile"):
+            self.assertIn("DRY-RUN would execute: " + command, out)
+        self.assertIn("/etc/fstab", out)
+
+    def test_apply_swap_unattended_input_declines_every_step(self):
+        # confirm.py: EOF means no; an unattended run must mutate nothing.
+        with mock.patch("builtins.input", side_effect=EOFError):
+            code, out, _err = self.run_cli(
+                "--simulate", str(self.UNTUNED), "--apply", "swap")
+        self.assertEqual(code, 1, out)
+        self.assertIn("declined", out)
+
+    def test_apply_swapfile_size_flows_into_the_sequence(self):
+        code, out, _err = self.run_cli(
+            "--simulate", str(self.UNTUNED), "--apply", "swap", "--dry-run",
+            "--swapfile-size", "4")
+        self.assertEqual(code, 0, out)
+        self.assertIn("sudo fallocate -l 4G /swapfile", out)
+
+    def test_apply_mlstack_still_not_implemented(self):
         code, _out, err = self.run_cli(
-            "--simulate", str(self.fixture), "--apply", "swap"
-        )
+            "--simulate", str(self.fixture), "--apply", "mlstack")
         self.assertEqual(code, 2)
         self.assertIn("not implemented", err)
-        self.assertIn("Phase 2", err)
+        self.assertIn("Phase 3", err)
 
     def test_apply_storage_is_no_longer_a_valid_choice(self):
         # v1.1: storage is Tier 3 advisory-only forever, no apply mode exists.
@@ -66,12 +97,12 @@ class PostbootCliTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(err, "")
 
-    def test_undo_not_implemented_yet(self):
-        code, _out, err = self.run_cli(
-            "--simulate", str(self.fixture), "--undo", "swap"
-        )
-        self.assertEqual(code, 2)
-        self.assertIn("not implemented", err)
+    def test_undo_swap_without_recorded_state_warns(self):
+        base = Path(__file__).resolve().parent / "fixtures" / "orin-nano-8gb"
+        code, out, _err = self.run_cli(
+            "--simulate", str(base), "--undo", "swap")
+        self.assertEqual(code, 1, out)
+        self.assertIn("nothing to undo", out)
 
     def test_simulate_dir_without_manifest_fails_cleanly(self):
         code, _out, err = self.run_cli("--simulate", str(self.work / "nope"))

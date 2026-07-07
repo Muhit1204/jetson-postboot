@@ -1,10 +1,10 @@
-# Derived fixture variant: sfdisk-denied
+# Derived fixture variant: sudo-denied
 
 Copy of orin-nano-8gb (captured 2026-07-05) with these edits and nothing
 else, per PLAN.md section 7 (derived variants):
 
-- manifest.json: "sudo sfdisk -d /dev/nvme0n1" -> returncode 1 with
-  stderr sudo-denied.txt; sfdisk-dump.txt removed (no stdout).
+- manifest.json: "sudo sfdisk -d /dev/nvme0n1" and "sudo nvpmodel -q" -> returncode 1 with
+  stderr sudo-denied.txt; sfdisk-dump.txt and nvpmodel-q.txt removed (no stdout).
 - sudo-denied.txt: real stderr captured on the board 2026-07-07 when
   sudo could not prompt for a password (non-interactive session).
 - CAPTURE.md removed (applies to the base set only).

@@ -104,7 +104,7 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(report.exit_code(), 1)
 
     def test_sfdisk_failure_reports_unreadable_table_not_absence(self):
-        report = self.run_check(FIXTURES / "orin-nano-8gb-sfdisk-denied")
+        report = self.run_check(FIXTURES / "orin-nano-8gb-sudo-denied")
         text = report.render_text()
         warns = [f for f in report.findings if f.level == LEVEL_WARN]
         self.assertTrue(

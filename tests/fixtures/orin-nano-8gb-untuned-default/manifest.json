@@ -11,7 +11,7 @@
     "zramctl --bytes": "zramctl.txt",
     "systemctl is-enabled nvzramconfig.service": {
       "stdout": "nvzramconfig-enabled.txt",
-      "returncode": 1
+      "returncode": 0
     },
     "nvcc --version": {
       "stdout": "nvcc-version.txt",
@@ -32,10 +32,58 @@
     "sudo cp ./.work/99-jetson-postboot.conf /etc/sysctl.d/99-jetson-postboot.conf": {
       "returncode": 0
     },
+    "sudo systemctl disable nvzramconfig.service": {
+      "returncode": 0
+    },
+    "sudo systemctl stop nvzramconfig.service": {
+      "returncode": 0
+    },
+    "sudo swapoff /dev/zram0": {
+      "returncode": 0
+    },
+    "sudo swapoff /dev/zram1": {
+      "returncode": 0
+    },
+    "sudo swapoff /dev/zram2": {
+      "returncode": 0
+    },
+    "sudo swapoff /dev/zram3": {
+      "returncode": 0
+    },
+    "sudo swapoff /dev/zram4": {
+      "returncode": 0
+    },
+    "sudo swapoff /dev/zram5": {
+      "returncode": 0
+    },
+    "sudo fallocate -l 8G /swapfile": {
+      "returncode": 0
+    },
+    "sudo chmod 600 /swapfile": {
+      "returncode": 0
+    },
+    "sudo mkswap /swapfile": {
+      "returncode": 0
+    },
+    "sudo swapon /swapfile": {
+      "returncode": 0
+    },
+    "sudo cp ./.work/fstab.new /etc/fstab": {
+      "returncode": 0
+    },
     "sudo sysctl -w vm.swappiness=60": {
       "returncode": 0
     },
     "sudo rm /etc/sysctl.d/99-jetson-postboot.conf": {
+      "returncode": 0
+    },
+    "sudo systemctl enable nvzramconfig.service": {
+      "returncode": 0
+    },
+    "sudo swapoff /swapfile": {
+      "returncode": 0
+    },
+    "sudo rm /swapfile": {
       "returncode": 0
     }
   },

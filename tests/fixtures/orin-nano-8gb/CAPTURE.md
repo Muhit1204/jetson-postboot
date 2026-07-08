@@ -130,3 +130,12 @@ returncode-0/no-stdout entries (sysctl -w for 10 and 60, cp of the staged
 sysctl.d file, rm of that file). Mutation commands print nothing the tool
 parses, so these entries invent no output; they exist because simulate
 mode demands manifest completeness for every issued command (D4).
+
+## Phase 3 additions (2026-07-08, synthetic where noted)
+
+- ollama-install.sh: SYNTHETIC placeholder (development is offline per
+  GUARDRAILS 4; the real script is fetched at runtime). The manifest maps
+  the download URL "https://ollama.com/install.sh" to it in "files" - the
+  simulate-mode stand-in for the network fetch (see PROJECT_CONTEXT D28).
+- "sudo sh ./downloads/ollama-install.sh" and "ollama pull qwen2.5:3b":
+  returncode-0/no-stdout mutation entries (nothing parsed from them).

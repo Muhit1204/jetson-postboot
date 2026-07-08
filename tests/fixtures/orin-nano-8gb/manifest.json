@@ -37,6 +37,12 @@
     },
     "sudo rm /etc/sysctl.d/99-jetson-postboot.conf": {
       "returncode": 0
+    },
+    "sudo sh ./downloads/ollama-install.sh": {
+      "returncode": 0
+    },
+    "ollama pull qwen2.5:3b": {
+      "returncode": 0
     }
   },
   "files": {
@@ -46,6 +52,7 @@
     "/proc/meminfo": "meminfo.txt",
     "/boot/extlinux/extlinux.conf": "extlinux.conf.txt",
     "/usr/local/cuda": "usr-local-cuda-target.txt",
-    "/etc/fstab": "fstab.txt"
+    "/etc/fstab": "fstab.txt",
+    "https://ollama.com/install.sh": "ollama-install.sh"
   }
 }

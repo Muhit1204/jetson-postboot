@@ -23,9 +23,9 @@ from jetson_postboot.modules import boot_advisor, mlstack, storage, swap
 REPO_ROOT = Path(__file__).resolve().parent
 
 # Apply/undo dispatch: implemented targets map to module callables taking
-# (runner, report, ctx); unimplemented ones name their phase. No storage
-# entry: storage is Tier 3 advisory-only per GUARDRAILS v1.1.
-_APPLY = {"swap": swap.apply, "mlstack": "Phase 3"}
+# (runner, report, ctx). No storage entry: storage is Tier 3 advisory-only
+# per GUARDRAILS v1.1; no mlstack undo in v1 (PLAN 6.6).
+_APPLY = {"swap": swap.apply, "mlstack": mlstack.apply}
 _UNDO = {"swap": swap.undo}
 
 # Tier 0 detection registry: (module name, check callable). Each callable
@@ -62,6 +62,12 @@ def build_parser():
                         default=swap.DEFAULT_SWAPFILE_GIB,
                         help="swapfile size in GiB for --apply swap "
                              "(default {})".format(swap.DEFAULT_SWAPFILE_GIB))
+    parser.add_argument("--model", metavar="TAG",
+                        default=mlstack.DEFAULT_MODEL,
+                        help="model tag for --apply mlstack, e.g. qwen2.5:3b "
+                             "(default {}; the pull is fit-checked against "
+                             "this board's memory)".format(
+                                 mlstack.DEFAULT_MODEL))
     return parser
 
 
@@ -101,20 +107,22 @@ def _dispatch(args, stdout, stderr, root):
         echo=echo,
     )
     target = _APPLY.get(args.apply) if args.apply else _UNDO.get(args.undo)
-    if isinstance(target, str):  # unimplemented: names its phase
-        stderr.write("error: --apply {} is not implemented yet (arrives in {}).\n".format(
-            args.apply, target))
-        return 2
     report = Report(mode=runner.mode, tool_version=__version__)
     if target is not None:
         ctx = {
             "state": StateStore(root / "state" / "state.json"),
             "backups_dir": root / "backups",
             "work_dir": root / ".work",
+            "downloads_dir": root / "downloads",
             "echo": echo,
             "confirm": lambda prompt: ask(prompt, output=echo),
             "dry_run": args.dry_run,
             "swapfile_size_gib": args.swapfile_size,
+            "model": args.model,
+            # Simulate answers the one allowed network fetch from the
+            # fixture "files" map, keyed by URL (D28); real mode downloads.
+            "fetch": ((lambda url: runner.read_file(url).encode("utf-8"))
+                      if fixture_dir is not None else None),
         }
         target(runner, report, ctx)
     else:

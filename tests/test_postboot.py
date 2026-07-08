@@ -80,12 +80,36 @@ class PostbootCliTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("sudo fallocate -l 4G /swapfile", out)
 
-    def test_apply_mlstack_still_not_implemented(self):
-        code, _out, err = self.run_cli(
-            "--simulate", str(self.fixture), "--apply", "mlstack")
-        self.assertEqual(code, 2)
-        self.assertIn("not implemented", err)
-        self.assertIn("Phase 3", err)
+    BASE = Path(__file__).resolve().parent / "fixtures" / "orin-nano-8gb"
+
+    def test_apply_mlstack_dry_run_prints_install_and_pull(self):
+        code, out, _err = self.run_cli(
+            "--simulate", str(self.BASE), "--apply", "mlstack", "--dry-run")
+        self.assertEqual(code, 0, out)
+        self.assertIn("DRY-RUN would execute: sudo sh", out)
+        self.assertIn("DRY-RUN would execute: ollama pull qwen2.5:3b", out)
+        self.assertIn("ollama.com", out)
+
+    def test_apply_mlstack_model_flag_and_refusal(self):
+        # ollama already installed, so the flow goes straight to the fit
+        # check and refuses the oversize tag without prompting for anything.
+        fixture = self.work / "fixture-installed"
+        fixture.mkdir()
+        (fixture / "which-ollama.txt").write_text(
+            "/usr/local/bin/ollama\n", encoding="utf-8")
+        (fixture / "meminfo.txt").write_text(
+            (self.BASE / "meminfo.txt").read_text(encoding="utf-8"),
+            encoding="utf-8")
+        (fixture / "manifest.json").write_text(json.dumps({
+            "commands": {"which ollama": "which-ollama.txt"},
+            "files": {"/proc/meminfo": "meminfo.txt"},
+        }), encoding="utf-8")
+        code, out, _err = self.run_cli(
+            "--simulate", str(fixture), "--apply", "mlstack",
+            "--model", "gemma2:26b")
+        self.assertEqual(code, 1, out)
+        self.assertIn("out of memory", out)
+        self.assertNotIn("ollama pull", out)
 
     def test_apply_storage_is_no_longer_a_valid_choice(self):
         # v1.1: storage is Tier 3 advisory-only forever, no apply mode exists.

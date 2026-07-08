@@ -77,12 +77,13 @@ def check(runner, report):
                        "detection-only mode".format(l4t))
         else:
             report.add(LEVEL_PASS, "system",
-                       "L4T r{} ({})".format(l4t, jetpack))
+                       "Jetson software: L4T r{} ({})".format(l4t, jetpack))
 
     mem = parse_meminfo(runner.read_file("/proc/meminfo"))
     if mem:
         report.add(LEVEL_PASS, "system",
-                   "memory: MemTotal {}, MemAvailable {}, SwapTotal {}".format(
+                   "memory: {} of RAM total (MemTotal), {} free right now "
+                   "(MemAvailable), {} of swap space (SwapTotal)".format(
                        human_gib(mem.get("MemTotal", 0)),
                        human_gib(mem.get("MemAvailable", 0)),
                        human_gib(mem.get("SwapTotal", 0))))
@@ -96,7 +97,9 @@ def check(runner, report):
     else:
         mode = parse_nvpmodel(mode_result.stdout)
         if mode:
-            report.add(LEVEL_PASS, "system", "power mode: {}".format(mode))
+            report.add(LEVEL_PASS, "system",
+                       "power mode: {} (this sets how much speed and power "
+                       "the board uses)".format(mode))
 
     python_result = runner.run(["python3", "--version"])
     report.add(LEVEL_PASS, "system", python_result.stdout.strip())

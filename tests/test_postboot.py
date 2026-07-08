@@ -233,7 +233,7 @@ class Phase1IntegrationTests(unittest.TestCase):
         # storage: this board's root already spans the disk
         self.assertIn("spans", out)
         # boot verdict (a)
-        self.assertIn("matches mounted root /dev/nvme0n1p1", out)
+        self.assertIn("matches the mounted root /dev/nvme0n1p1", out)
         # CUDA stack summarized
         self.assertIn("cuda-12.6", out)
         self.assertIn("libcudnn9-cuda-12", out)

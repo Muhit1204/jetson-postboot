@@ -95,6 +95,16 @@ class CheckTests(unittest.TestCase):
         self.assertTrue(all(f.level == LEVEL_PASS for f in self.report.findings))
         self.assertEqual(self.report.exit_code(), 0)
 
+    def test_identity_text_is_plain_language(self):
+        # PLAN G6 (D27): the report explains its jargon in plain words while
+        # keeping the technical terms, so a non-technical user follows it.
+        system_info.check(self.runner, self.report)
+        text = self.report.render_text()
+        self.assertIn("RAM", text)              # gloss for MemTotal
+        self.assertIn("free right now", text)   # gloss for MemAvailable
+        self.assertIn("Jetson software", text)  # gloss for L4T/JetPack
+        self.assertIn("speed and power", text)  # gloss for the power mode
+
     def test_nvpmodel_failure_warns_instead_of_silent_omission(self):
         # O8 (Munta 2026-07-07): a failed power-mode read is a WARN finding,
         # never a silently missing line.

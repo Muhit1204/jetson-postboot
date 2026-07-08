@@ -97,8 +97,10 @@ def check(runner, report, backups_dir=None):
                 _efibootmgr(runner, report)
                 return
         report.add(LEVEL_PASS, "boot",
-                   "configured root ({}={}) matches mounted root {}; "
-                   "expected layout".format(kind, value, mounted))
+                   "configured root ({}={}) matches the mounted root {}: the "
+                   "board is set to start from the same drive it actually "
+                   "runs on, which is the normal, correct layout for this "
+                   "devkit".format(kind, value, mounted))
     else:
         line = _append_line(extlinux) or ""
         details = [
@@ -127,5 +129,7 @@ def _efibootmgr(runner, report):
     if result.returncode == 0 and result.stdout.strip():
         head = result.stdout.strip().splitlines()
         report.add(LEVEL_PASS, "boot",
-                   "efibootmgr (read-only): {}".format(head[0]),
+                   "boot menu entries (from efibootmgr, read-only - shown "
+                   "for reference, nothing here needs changing): {}".format(
+                       head[0]),
                    details="\n".join(head[1:6]))

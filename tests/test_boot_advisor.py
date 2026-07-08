@@ -108,6 +108,11 @@ class CheckTests(unittest.TestCase):
         self.assertIn("matches", text)
         self.assertIn("/dev/nvme0n1p1", text)
 
+    def test_verdict_a_text_is_plain_language(self):
+        # PLAN G6 (D27): say plainly that this layout is normal and correct.
+        report, _work = self.run_check(BASE)
+        self.assertIn("normal, correct", report.render_text())
+
     def test_verdict_a_includes_readonly_efibootmgr(self):
         report, _work = self.run_check(BASE)
         text = report.render_text()

@@ -145,7 +145,8 @@ def check(runner, report):
     fs_size = int(df_lines[1].split()[1]) if len(df_lines) > 1 else 0
 
     report.add(LEVEL_PASS, "storage",
-               "disk {} {}, root partition {}, filesystem {}".format(
+               "storage drive {} is {}; its main partition is {} and the "
+               "usable filesystem on it is {}".format(
                    disk, human_gib(disk_node.get("size", 0)),
                    human_gib(root_node.get("size", 0)), human_gib(fs_size)))
 
@@ -167,8 +168,10 @@ def check(runner, report):
     gap = trailing_gap_bytes(dump, source)
     if gap <= _RECLAIM_THRESHOLD:
         report.add(LEVEL_PASS, "storage",
-                   "root partition already spans the disk "
-                   "({} unallocated behind it)".format(human_gib(gap)))
+                   "root partition already spans the disk: the main "
+                   "partition uses the whole drive, so there is no wasted "
+                   "space to reclaim ({} unallocated behind it)".format(
+                       human_gib(gap)))
         return
 
     blockers = partitions_after(dump, source)
@@ -187,10 +190,11 @@ def check(runner, report):
 
     report.add(
         LEVEL_ACTION, "storage",
-        "{:.1f} GB ({}) of unallocated space sits behind the root "
-        "partition and can be reclaimed by extending it (advisory only; "
-        "the tool never runs these commands).".format(
-            gap / 1e9, human_gib(gap)),
+        "{:.1f} GB ({}) of unused drive space sits behind the main "
+        "partition (this happens when a small SD card was cloned onto a "
+        "bigger drive). You can reclaim it by growing the partition. This "
+        "tool never runs these commands for you - it only shows them; run "
+        "them yourself when ready.".format(gap / 1e9, human_gib(gap)),
         details=advisory_sequence(
             disk, partnum, source,
             header_at_end(dump, disk_node.get("size", 0))))

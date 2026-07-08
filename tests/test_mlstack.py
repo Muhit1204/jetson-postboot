@@ -69,6 +69,12 @@ class CheckTests(unittest.TestCase):
         self.assertIn("libcudnn9-cuda-12", text)
         self.assertIn("9.3.0.75-1", text)
 
+    def test_cuda_stack_explained_in_plain_words(self):
+        # PLAN G6: name what CUDA/cuDNN are, not just the version strings.
+        mlstack.check(self.runner, self.report)
+        text = self.report.render_text()
+        self.assertIn("run AI", text)
+
     def test_nvidia_smi_na_explained(self):
         mlstack.check(self.runner, self.report)
         text = self.report.render_text()

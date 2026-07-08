@@ -161,7 +161,9 @@ def check(runner, report):
         target = None
     if target:
         report.add(LEVEL_PASS, "mlstack",
-                   "CUDA toolkit: {} -> {}".format(_CUDA_SYMLINK, target))
+                   "CUDA toolkit: {} -> {} (CUDA is NVIDIA's software for "
+                   "using the GPU to run AI programs; cuDNN below adds the "
+                   "deep-learning pieces)".format(_CUDA_SYMLINK, target))
     else:
         report.add(LEVEL_WARN, "mlstack",
                    "no {} symlink: CUDA toolkit not installed".format(

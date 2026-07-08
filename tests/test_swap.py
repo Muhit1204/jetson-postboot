@@ -142,6 +142,13 @@ class CheckTests(unittest.TestCase):
         self.assertIn("60", self.report.render_text())
         self.assertEqual(self.report.exit_code(), 1)
 
+    def test_detection_text_is_plain_language(self):
+        # PLAN G6 (D27): swappiness and the zram service explained in words.
+        swap.check(self.runner, self.report)
+        text = self.report.render_text()
+        self.assertIn("Swappiness controls", text)
+        self.assertIn("switches zram on at boot", text)
+
     def test_existing_swapfile_and_disabled_zram_reported(self):
         swap.check(self.runner, self.report)
         text = self.report.render_text()

@@ -155,18 +155,23 @@ def check(runner, report):
     if swappiness > RECOMMENDED_SWAPPINESS:
         report.add(
             LEVEL_ACTION, "swap",
-            "vm.swappiness is {} (recommended {}). The swap profile "
-            "(--apply swap, Phase 2) sets and persists it.".format(
+            "vm.swappiness is {} (recommended {}). Swappiness controls how "
+            "eagerly the system moves memory out to slower storage; a high "
+            "value can slow AI work down. Run 'postboot.py --apply swap' to "
+            "set and keep the recommended value.".format(
                 swappiness, RECOMMENDED_SWAPPINESS))
     else:
         report.add(LEVEL_PASS, "swap",
-                   "vm.swappiness is {}".format(swappiness))
+                   "vm.swappiness is {} (a good value for AI work)".format(
+                       swappiness))
 
     devices = parse_zramctl(runner.run(["zramctl", "--bytes"]).stdout)
     mem = parse_meminfo(runner.read_file("/proc/meminfo"))
     total = zram_total(devices)
     if not devices:
-        report.add(LEVEL_PASS, "swap", "no zram devices active")
+        report.add(LEVEL_PASS, "swap",
+                   "no zram devices active (zram is compressed swap kept "
+                   "inside RAM; none is switched on, which is what we want)")
     elif zram_at_jetpack_default(total, mem.get("MemTotal", 0)):
         report.add(
             LEVEL_ACTION, "swap",
@@ -183,7 +188,8 @@ def check(runner, report):
         ["systemctl", "is-enabled", "nvzramconfig.service"])
     state = enabled.stdout.strip() or "unknown"
     report.add(LEVEL_PASS, "swap",
-               "nvzramconfig.service: {}".format(state))
+               "nvzramconfig.service: {} (this is the background service "
+               "that switches zram on at boot)".format(state))
 
     for entry in parse_swapon(runner.run(["swapon", "--show", "--bytes"]).stdout):
         level = LEVEL_PASS if entry["type"] == "file" else LEVEL_WARN

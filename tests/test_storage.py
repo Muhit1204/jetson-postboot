@@ -90,6 +90,11 @@ class CheckTests(unittest.TestCase):
         self.assertIn("spans", text)
         self.assertTrue(all(f.level == LEVEL_PASS for f in report.findings))
 
+    def test_spans_line_is_plain_language(self):
+        # PLAN G6 (D27): explain "spans the disk" in plain words.
+        report = self.run_check(BASE)
+        self.assertIn("no wasted space", report.render_text())
+
     def test_small_root_fires_advisory_with_exact_sequence(self):
         report = self.run_check(FIXTURES / "orin-nano-8gb-small-root")
         text = report.render_text()

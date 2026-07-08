@@ -78,10 +78,16 @@ class CheckTests(unittest.TestCase):
 
     def test_ollama_absence_is_informational(self):
         mlstack.check(self.runner, self.report)
-        ollama = [f for f in self.report.findings if "llama" in f.message]
+        ollama = [f for f in self.report.findings if "Ollama" in f.message]
         self.assertEqual(len(ollama), 1)
         self.assertEqual(ollama[0].level, LEVEL_PASS)
         self.assertIn("not installed", ollama[0].message)
+
+    def test_check_suggests_a_model_for_this_board(self):
+        mlstack.check(self.runner, self.report)
+        text = self.report.render_text()
+        self.assertIn("qwen2.5:3b", text)
+        self.assertIn("free for", text)
 
 
 class ModelFitTests(unittest.TestCase):
@@ -120,6 +126,29 @@ class ModelFitTests(unittest.TestCase):
                 verdict, explanation = mlstack.model_fit(tag, self.MEM_TOTAL)
                 self.assertEqual(verdict, expected, explanation)
                 self.assertTrue(explanation)
+
+    def test_suggestion_for_the_8gb_board_is_3b_with_headroom(self):
+        # Munta 2026-07-08 (Q2): suggest from detected memory, keeping the
+        # model within half of RAM so the rest stays free for other work.
+        params, tag, explanation = mlstack.suggest_model(self.MEM_TOTAL)
+        self.assertEqual(params, 3)
+        self.assertEqual(tag, "qwen2.5:3b")
+        self.assertIn("free", explanation)
+
+    def test_suggestion_scales_with_memory(self):
+        gib = 1 << 30
+        cases = [(4 * gib, "qwen2.5:0.5b"), (16 * gib, "qwen2.5:7b"),
+                 (64 * gib, "qwen2.5:32b")]
+        for mem_total, expected in cases:
+            with self.subTest(mem_total=mem_total):
+                _params, tag, _explanation = mlstack.suggest_model(mem_total)
+                self.assertEqual(tag, expected)
+
+    def test_tiny_memory_suggests_nothing_and_says_why(self):
+        params, tag, explanation = mlstack.suggest_model(1 << 30)
+        self.assertIsNone(params)
+        self.assertIsNone(tag)
+        self.assertIn("memory", explanation)
 
     def test_refusal_explains_the_ceiling_in_plain_words(self):
         # PLAN G6: a high-school student must understand why it said no.
@@ -191,10 +220,12 @@ class ApplyTests(unittest.TestCase):
         script = self.work / "downloads" / "ollama-install.sh"
         self.assertTrue(script.is_file())
         self.assertTrue(self.issued("sh", str(script)), text)
+        # no --model given: the hardware-based suggestion is the default
         self.assertTrue(self.issued("ollama", "pull", "qwen2.5:3b"), text)
         joined = "\n".join(self.echoed)
         self.assertIn("sha256", joined)
         self.assertRegex(joined, r"\d+ bytes")
+        self.assertIn("free for", text)
         self.assertIn("fits comfortably", text)
 
     def test_oversize_model_refused_without_pull(self):

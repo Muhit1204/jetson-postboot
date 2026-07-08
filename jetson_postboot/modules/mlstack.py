@@ -26,9 +26,37 @@ _CUDA_SYMLINK = "/usr/local/cuda"
 # GUARDRAILS 4: the one download URL this tool may fetch.
 OLLAMA_INSTALL_URL = "https://ollama.com/install.sh"
 _INSTALL_SCRIPT_NAME = "ollama-install.sh"
-# Provisional default until PLAN Q2 names the featured tag: a 3B model
-# fits the 8 GB board comfortably.
-DEFAULT_MODEL = "qwen2.5:3b"
+# PLAN 6.6 v1.3 (Munta 2026-07-08, answering Q2): when no --model is given,
+# suggest one from detected memory, keeping the model's estimated need
+# within this share of total RAM so the rest stays free for the user's
+# other tasks.
+_SUGGEST_RATIO = 0.50
+# One known-good tag family, largest first, so the tool never invents a tag.
+_SUGGEST_CLASSES = (
+    (32, "qwen2.5:32b"), (14, "qwen2.5:14b"), (7, "qwen2.5:7b"),
+    (3, "qwen2.5:3b"), (1.5, "qwen2.5:1.5b"), (0.5, "qwen2.5:0.5b"),
+)
+
+
+def suggest_model(mem_total):
+    """(params_B, example_tag, plain-language explanation); (None, None,
+    explanation) when even the smallest class would crowd the board."""
+    have = human_gib(mem_total)
+    budget_gib = mem_total * _SUGGEST_RATIO / _GIB - MODEL_OVERHEAD_GIB
+    max_billions = (budget_gib / MODEL_GIB_PER_BILLION) if budget_gib > 0 else 0
+    for params, tag in _SUGGEST_CLASSES:
+        if params <= max_billions:
+            need = human_gib(estimate_resident_bytes(params))
+            return (params, tag,
+                    "Suggested local model for this board: about {:g}B "
+                    "parameters, for example {}. While running it needs "
+                    "about {}, which keeps at least half of the {} total "
+                    "memory free for everything else you run.".format(
+                        params, tag, need, have))
+    return (None, None,
+            "This board's {} of memory is too small to run a local chat "
+            "model and still leave room for other work; no model is "
+            "suggested.".format(have))
 _GIB = 1 << 30
 
 # PLAN 6.6 model-fit estimate. Deliberate rough constants, kept together:
@@ -158,8 +186,11 @@ def check(runner, report):
                    "Ollama installed: {}".format(ollama.stdout.strip()))
     else:
         report.add(LEVEL_PASS, "mlstack",
-                   "Ollama not installed (--apply mlstack installs it in "
-                   "Phase 3)")
+                   "Ollama not installed (--apply mlstack installs it)")
+
+    mem = parse_meminfo(runner.read_file("/proc/meminfo"))
+    params, _tag, explanation = suggest_model(mem.get("MemTotal", 0))
+    report.add(LEVEL_PASS if params else LEVEL_WARN, "mlstack", explanation)
 
 
 def _real_fetch(url):
@@ -179,7 +210,17 @@ def apply(runner, report, ctx):
     fetch = ctx.get("fetch") or _real_fetch
     downloads_dir = Path(ctx["downloads_dir"])
     script = downloads_dir / _INSTALL_SCRIPT_NAME
-    tag = ctx.get("model") or DEFAULT_MODEL
+
+    mem = parse_meminfo(runner.read_file("/proc/meminfo"))
+    tag = ctx.get("model")
+    if not tag:
+        _params, tag, suggestion = suggest_model(mem.get("MemTotal", 0))
+        if tag is None:
+            report.add(LEVEL_WARN, "mlstack", suggestion)
+            return
+        report.add(LEVEL_PASS, "mlstack", suggestion)
+        echo("")
+        echo(suggestion)
 
     installed = runner.run(["which", "ollama"]).returncode == 0
     if installed:
@@ -227,7 +268,6 @@ def apply(runner, report, ctx):
             installed = True
             report.add(LEVEL_PASS, "mlstack", "Ollama installed")
 
-    mem = parse_meminfo(runner.read_file("/proc/meminfo"))
     verdict, explanation = model_fit(tag, mem.get("MemTotal", 0))
     if verdict in ("refuse", "unknown"):
         report.add(LEVEL_WARN, "mlstack", explanation)

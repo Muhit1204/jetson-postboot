@@ -62,12 +62,10 @@ def build_parser():
                         default=swap.DEFAULT_SWAPFILE_GIB,
                         help="swapfile size in GiB for --apply swap "
                              "(default {})".format(swap.DEFAULT_SWAPFILE_GIB))
-    parser.add_argument("--model", metavar="TAG",
-                        default=mlstack.DEFAULT_MODEL,
+    parser.add_argument("--model", metavar="TAG", default=None,
                         help="model tag for --apply mlstack, e.g. qwen2.5:3b "
-                             "(default {}; the pull is fit-checked against "
-                             "this board's memory)".format(
-                                 mlstack.DEFAULT_MODEL))
+                             "(default: the tool suggests one from this "
+                             "board's memory; every pull is fit-checked)")
     return parser
 
 

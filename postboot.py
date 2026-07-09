@@ -13,21 +13,32 @@ import traceback
 from pathlib import Path
 
 from jetson_postboot import __version__
+from jetson_postboot.checks import system_info
+from jetson_postboot.lib.confirm import ask
 from jetson_postboot.lib.report import Report
 from jetson_postboot.lib.runner import Runner, RunnerError
+from jetson_postboot.lib.state import StateStore
+from jetson_postboot.modules import boot_advisor, mlstack, storage, swap
 
 REPO_ROOT = Path(__file__).resolve().parent
 
-# Registry of when each apply/undo target lands; Phase 1+ replaces entries
-# with real module wiring. No storage entry: storage is Tier 3 advisory-only
-# per GUARDRAILS v1.1 and has no apply mode.
-_APPLY_PHASE = {"swap": "Phase 2", "mlstack": "Phase 3"}
-_UNDO_PHASE = {"swap": "Phase 2"}
+# Apply/undo dispatch: implemented targets map to module callables taking
+# (runner, report, ctx). No storage entry: storage is Tier 3 advisory-only
+# per GUARDRAILS v1.1; no mlstack undo in v1 (PLAN 6.6).
+_APPLY = {"swap": swap.apply, "mlstack": mlstack.apply}
+_UNDO = {"swap": swap.undo}
 
 # Tier 0 detection registry: (module name, check callable). Each callable
-# takes (runner, report) and appends findings. Populated as Phase 1 parsers
-# land; empty registry renders a valid empty report.
-_CHECKS = []
+# takes (runner, report, ctx) where ctx carries run-scoped paths the modules
+# may need (currently backups_dir, used by boot_advisor's verdict c).
+_CHECKS = [
+    ("system", lambda r, rep, ctx: system_info.check(r, rep)),
+    ("storage", lambda r, rep, ctx: storage.check(r, rep)),
+    ("swap", lambda r, rep, ctx: swap.check(r, rep)),
+    ("boot", lambda r, rep, ctx: boot_advisor.check(
+        r, rep, backups_dir=ctx["backups_dir"])),
+    ("mlstack", lambda r, rep, ctx: mlstack.check(r, rep)),
+]
 
 
 def build_parser():
@@ -39,14 +50,22 @@ def build_parser():
         ),
     )
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--apply", choices=sorted(_APPLY_PHASE),
+    group.add_argument("--apply", choices=sorted(_APPLY),
                        help="apply a confirmed profile")
-    group.add_argument("--undo", choices=sorted(_UNDO_PHASE),
+    group.add_argument("--undo", choices=sorted(_UNDO),
                        help="restore recorded pre-change state")
     parser.add_argument("--dry-run", action="store_true",
                         help="print exact commands, change nothing")
     parser.add_argument("--simulate", metavar="FIXTURE_DIR",
                         help="answer every command from a fixture set")
+    parser.add_argument("--swapfile-size", type=int, metavar="GIB",
+                        default=swap.DEFAULT_SWAPFILE_GIB,
+                        help="swapfile size in GiB for --apply swap "
+                             "(default {})".format(swap.DEFAULT_SWAPFILE_GIB))
+    parser.add_argument("--model", metavar="TAG", default=None,
+                        help="model tag for --apply mlstack, e.g. qwen2.5:3b "
+                             "(default: the tool suggests one from this "
+                             "board's memory; every pull is fit-checked)")
     return parser
 
 
@@ -76,24 +95,38 @@ def _dispatch(args, stdout, stderr, root):
             stderr.write(
                 "error: no manifest.json in fixture directory {}\n".format(fixture_dir))
             return 2
+    echo = lambda line: stdout.write(line + "\n")  # noqa: E731
     runner = Runner(
         log_dir=root / "logs",
         fixture_dir=fixture_dir,
         dry_run=args.dry_run,
         downloads_dir=root / "downloads",
-        echo=lambda line: stdout.write(line + "\n"),
+        work_dir=root / ".work",
+        echo=echo,
     )
-    if args.apply:
-        stderr.write("error: --apply {} is not implemented yet (arrives in {}).\n".format(
-            args.apply, _APPLY_PHASE[args.apply]))
-        return 2
-    if args.undo:
-        stderr.write("error: --undo {} is not implemented yet (arrives in {}).\n".format(
-            args.undo, _UNDO_PHASE[args.undo]))
-        return 2
+    target = _APPLY.get(args.apply) if args.apply else _UNDO.get(args.undo)
     report = Report(mode=runner.mode, tool_version=__version__)
-    for _name, check in _CHECKS:
-        check(runner, report)
+    if target is not None:
+        ctx = {
+            "state": StateStore(root / "state" / "state.json"),
+            "backups_dir": root / "backups",
+            "work_dir": root / ".work",
+            "downloads_dir": root / "downloads",
+            "echo": echo,
+            "confirm": lambda prompt: ask(prompt, output=echo),
+            "dry_run": args.dry_run,
+            "swapfile_size_gib": args.swapfile_size,
+            "model": args.model,
+            # Simulate answers the one allowed network fetch from the
+            # fixture "files" map, keyed by URL (D28); real mode downloads.
+            "fetch": ((lambda url: runner.read_file(url).encode("utf-8"))
+                      if fixture_dir is not None else None),
+        }
+        target(runner, report, ctx)
+    else:
+        ctx = {"backups_dir": root / "backups"}
+        for _name, check in _CHECKS:
+            check(runner, report, ctx)
     stdout.write(report.render_text())
     txt_path, json_path = report.save(root / "reports")
     stdout.write("report saved: {}\n".format(txt_path))

@@ -1,0 +1,2 @@
+NAME       TYPE        SIZE USED PRIO
+/16GB.swap file 17179865088    0   -2

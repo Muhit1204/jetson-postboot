@@ -100,3 +100,42 @@ returncodes came from.
 Derived variants (low-MemAvailable, partition-after-root, root-on-SD,
 root-mismatch) are Phase 1/2 work: they will be created by copying this set
 and editing single values, each documented in its own folder.
+
+## Phase 1 additions (captured 2026-07-05, on the board, unprivileged)
+
+Three entries beyond the original list, needed by boot_advisor:
+
+```bash
+blkid -U <root-uuid-from-extlinux> > blkid-uuid-root.txt
+which efibootmgr > which-efibootmgr.txt; echo $? > which-efibootmgr.rc
+efibootmgr > efibootmgr.txt
+```
+
+The blkid manifest key embeds this board's actual root UUID because the
+tool constructs the command from the UUID it parses out of extlinux.conf;
+simulate-mode key equality then proves the parse was right.
+
+## Phase 2 addition (captured 2026-07-07, on the board, unprivileged)
+
+The swap profile edits /etc/fstab, so simulate mode needs its ground truth:
+
+```bash
+cat /etc/fstab > fstab.txt
+```
+
+manifest.json gains the files entry "/etc/fstab": "fstab.txt".
+
+Phase 2 also adds the S1 apply/undo mutation commands to manifest.json as
+returncode-0/no-stdout entries (sysctl -w for 10 and 60, cp of the staged
+sysctl.d file, rm of that file). Mutation commands print nothing the tool
+parses, so these entries invent no output; they exist because simulate
+mode demands manifest completeness for every issued command (D4).
+
+## Phase 3 additions (2026-07-08, synthetic where noted)
+
+- ollama-install.sh: SYNTHETIC placeholder (development is offline per
+  GUARDRAILS 4; the real script is fetched at runtime). The manifest maps
+  the download URL "https://ollama.com/install.sh" to it in "files" - the
+  simulate-mode stand-in for the network fetch (see PROJECT_CONTEXT D28).
+- "sudo sh ./downloads/ollama-install.sh" and "ollama pull qwen2.5:3b":
+  returncode-0/no-stdout mutation entries (nothing parsed from them).

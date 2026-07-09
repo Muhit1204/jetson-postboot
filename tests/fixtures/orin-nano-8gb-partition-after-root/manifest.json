@@ -1,0 +1,39 @@
+{
+  "board": "orin-nano-8gb-partition-after-root",
+  "captured": "2026-07-05",
+  "commands": {
+    "python3 --version": "python3-version.txt",
+    "lsblk -b -J -o NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE,PTTYPE": "lsblk.json",
+    "sudo sfdisk -d /dev/nvme0n1": "sfdisk-dump.txt",
+    "df -B1 --output=source,size,used,avail,target /": "df-root.txt",
+    "findmnt -no SOURCE /": "findmnt-root.txt",
+    "swapon --show --bytes": "swapon-show.txt",
+    "zramctl --bytes": "zramctl.txt",
+    "systemctl is-enabled nvzramconfig.service": {
+      "stdout": "nvzramconfig-enabled.txt",
+      "returncode": 1
+    },
+    "nvcc --version": {
+      "stdout": "nvcc-version.txt",
+      "returncode": 127
+    },
+    "dpkg -l": "dpkg-cudnn.txt",
+    "sudo nvpmodel -q": "nvpmodel-q.txt",
+    "which ollama": {
+      "stdout": "which-ollama.txt",
+      "returncode": 1
+    },
+    "blkid -U 52d10c20-4c4e-4ea4-8a00-d5ccdc19c122": "blkid-uuid-root.txt",
+    "which efibootmgr": "which-efibootmgr.txt",
+    "efibootmgr": "efibootmgr.txt"
+  },
+  "files": {
+    "/etc/nv_tegra_release": "nv_tegra_release.txt",
+    "/proc/device-tree/model": "device-tree-model.txt",
+    "/proc/sys/vm/swappiness": "swappiness.txt",
+    "/proc/meminfo": "meminfo.txt",
+    "/boot/extlinux/extlinux.conf": "extlinux.conf.txt",
+    "/usr/local/cuda": "usr-local-cuda-target.txt"
+  },
+  "note": "Derived variant of orin-nano-8gb; edits documented in README.md in this directory. Not raw hardware capture."
+}

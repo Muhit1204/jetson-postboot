@@ -19,6 +19,10 @@ ALLOWED_STDLIB = frozenset({
     "errno", "functools", "hashlib", "io", "json", "os", "pathlib",
     "platform", "re", "shlex", "shutil", "stat", "string", "subprocess",
     "sys", "textwrap", "time", "traceback", "types", "typing", "unittest",
+    # urllib added for Phase 3: GUARDRAILS 4 explicitly allows downloading
+    # the Ollama install script into ./downloads/ behind confirmation, and
+    # urllib.request is the stdlib vehicle for that one declared purpose.
+    "urllib",
     "uuid",
 })
 LOCAL_ROOTS = frozenset({"jetson_postboot", "postboot", "tests"})

@@ -54,6 +54,12 @@ _SYSTEMCTL_MUTATE = frozenset({"enable", "disable", "stop"})
 _SYSTEMCTL_UNIT = "nvzramconfig.service"
 # GUARDRAILS 3.3 item 3: the only swapfile this tool may ever manage.
 _SWAPFILE = "/swapfile"
+# GUARDRAILS v1.2: cp writes staged ./.work/ files onto exactly these two
+# targets; rm removes exactly the conf file and the swapfile. /etc/fstab is
+# edited (via cp after the single-tagged-line assertion), never removed.
+_SYSCTL_CONF = "/etc/sysctl.d/99-jetson-postboot.conf"
+_CP_DESTINATIONS = frozenset({_SYSCTL_CONF, "/etc/fstab"})
+_RM_TARGETS = frozenset({_SYSCTL_CONF, _SWAPFILE})
 
 
 def _reject(argv, why):
@@ -65,7 +71,7 @@ def _require(condition, argv, why):
         _reject(argv, why)
 
 
-def _validate(argv, mutate, downloads_dir):
+def _validate(argv, mutate, downloads_dir, work_dir):
     """Enforce the allowlist. Raises CommandNotAllowedError on any violation.
 
     Constraints tighter than GUARDRAILS are deliberate scope locks for v1
@@ -168,6 +174,27 @@ def _validate(argv, mutate, downloads_dir):
         except ValueError:
             _reject(argv, "sh may execute scripts from ./downloads/ only")
         return
+    if binary == "cp":
+        _require(mutate, argv, "cp is a mutation; call with mutate=True")
+        _require(len(args) == 2 and not args[0].startswith("-"), argv,
+                 "cp takes exactly a staged source and a destination")
+        _require(args[1] in _CP_DESTINATIONS, argv,
+                 "cp may write {} only".format(" or ".join(sorted(_CP_DESTINATIONS))))
+        if work_dir is None:
+            _reject(argv, "runner has no work directory configured")
+        source = Path(args[0]).resolve()
+        try:
+            source.relative_to(Path(work_dir).resolve())
+        except ValueError:
+            _reject(argv, "cp source must be staged under ./.work/")
+        return
+    if binary == "rm":
+        _require(mutate, argv, "rm is a mutation; call with mutate=True")
+        _require(len(args) == 1 and not args[0].startswith("-"), argv,
+                 "rm takes exactly one target and no flags")
+        _require(args[0] in _RM_TARGETS, argv,
+                 "rm may remove {} only".format(" or ".join(sorted(_RM_TARGETS))))
+        return
     if binary == "ollama":
         _require(mutate, argv, "ollama commands are treated as mutations in v1")
         return
@@ -176,11 +203,12 @@ def _validate(argv, mutate, downloads_dir):
 
 class Runner:
     def __init__(self, log_dir, fixture_dir=None, dry_run=False,
-                 downloads_dir=None, echo=None):
+                 downloads_dir=None, work_dir=None, echo=None):
         self._log_dir = Path(log_dir)
         self._fixture_dir = Path(fixture_dir) if fixture_dir is not None else None
         self._dry_run = bool(dry_run)
         self._downloads_dir = Path(downloads_dir) if downloads_dir is not None else None
+        self._work_dir = Path(work_dir) if work_dir is not None else None
         self._echo = echo if echo is not None else print
         self._log_path = None  # type: Optional[Path]
         self._manifest = self._load_manifest() if self._fixture_dir is not None else None
@@ -199,7 +227,7 @@ class Runner:
         if not argv:
             raise RunnerError("empty argv")
         argv = [str(a) for a in argv]
-        _validate(argv, mutate, self._downloads_dir)
+        _validate(argv, mutate, self._downloads_dir, self._work_dir)
         full = (["sudo"] + argv) if sudo else list(argv)
         command = " ".join(full)
         if mutate and self._dry_run:
@@ -222,6 +250,18 @@ class Runner:
             return (self._fixture_dir / entry).read_text(encoding="utf-8")
         self._log("REAL", "read {}".format(path))
         return Path(path).read_text(encoding="utf-8")
+
+    def file_exists(self, path):
+        """True when the system file exists. Real: os.path.exists. Simulate:
+        membership in the manifest "files" map, so fixtures express absence
+        by omission (unlike read_file, where a miss is a fixture gap)."""
+        path = str(path)
+        if self._manifest is not None:
+            exists = path in self._manifest["files"]
+            self._log("SIMULATE", "exists {} -> {}".format(path, exists))
+            return exists
+        self._log("REAL", "exists {}".format(path))
+        return os.path.exists(path)
 
     def read_link(self, path):
         """Resolve a symlink target. Real: os.readlink. Simulate: the files
@@ -251,7 +291,18 @@ class Runner:
         data.setdefault("files", {})
         return data
 
+    def _portable_key(self, command):
+        """Manifest keys must not embed machine-specific absolute paths:
+        rewrite the configured work/downloads dirs to their repo-relative
+        spellings before lookup."""
+        for directory, spelling in ((self._work_dir, "./.work"),
+                                    (self._downloads_dir, "./downloads")):
+            if directory is not None:
+                command = command.replace(str(Path(directory).resolve()), spelling)
+        return command
+
     def _simulate(self, full, command):
+        command = self._portable_key(command)
         entry = self._manifest["commands"].get(command)
         if entry is None:
             self._log("SIM-MISS", command)
@@ -268,7 +319,16 @@ class Runner:
         return CommandResult(full, returncode, stdout, stderr, "simulate", False)
 
     def _execute(self, full, command):
-        completed = subprocess.run(full, capture_output=True, text=True, check=False)
+        try:
+            completed = subprocess.run(full, capture_output=True, text=True, check=False)
+        except FileNotFoundError:
+            # Shell convention for command-not-found; lets checks report an
+            # absent optional binary (nvcc, efibootmgr, ...) as a finding
+            # instead of crashing the run.
+            self._log("REAL", command, 127)
+            return CommandResult(full, 127, "",
+                                 "{}: command not found".format(full[0]),
+                                 "real", False)
         self._log("REAL", command, completed.returncode)
         return CommandResult(full, completed.returncode, completed.stdout or "",
                              completed.stderr or "", "real", True)

@@ -28,12 +28,13 @@ class RunnerTestCase(unittest.TestCase):
         self.downloads.mkdir()
         self.echoed = []
 
-    def make_runner(self, fixture_dir=None, dry_run=False):
+    def make_runner(self, fixture_dir=None, dry_run=False, work_dir=None):
         return Runner(
             log_dir=self.log_dir,
             fixture_dir=fixture_dir,
             dry_run=dry_run,
             downloads_dir=self.downloads,
+            work_dir=work_dir,
             echo=self.echoed.append,
         )
 
@@ -218,6 +219,102 @@ class SimulateTests(RunnerTestCase):
             self.make_runner(fixture_dir=empty)
 
 
+class CpRmAllowlistTests(RunnerTestCase):
+    """GUARDRAILS v1.2: cp/rm hard-locked to exact source/destination pairs."""
+
+    CONF = "/etc/sysctl.d/99-jetson-postboot.conf"
+    FSTAB = "/etc/fstab"
+
+    def setUp(self):
+        super().setUp()
+        self.staging = self.work / "staging-work"
+        self.staging.mkdir()
+        self.staged = self.staging / "fstab.new"
+        self.staged.write_text("staged\n", encoding="utf-8")
+
+    def locked_runner(self):
+        return self.make_runner(dry_run=True, work_dir=self.staging)
+
+    def test_cp_and_rm_locked_pairs_pass_validation_dry_run(self):
+        runner = self.locked_runner()
+        cases = [
+            ["cp", str(self.staged), self.CONF],
+            ["cp", str(self.staged), self.FSTAB],
+            ["rm", self.CONF],
+            ["rm", "/swapfile"],
+        ]
+        for argv in cases:
+            with self.subTest(argv=argv):
+                result = runner.run(argv, sudo=True, mutate=True)
+                self.assertFalse(result.executed)
+                self.assertEqual(result.mode, "dry-run")
+
+    def test_cp_and_rm_rejections(self):
+        runner = self.locked_runner()
+        outside = self.work / "outside.txt"
+        outside.write_text("x\n", encoding="utf-8")
+        cases = [
+            (["cp", str(self.staged), self.CONF], False),  # mutate required
+            (["cp", str(outside), self.CONF], True),  # source not staged
+            (["cp", "/etc/passwd", self.CONF], True),
+            (["cp", str(self.staged), "/etc/sysctl.d/other.conf"], True),
+            (["cp", str(self.staged), "/etc/passwd"], True),
+            (["cp", str(self.staged)], True),  # missing destination
+            (["cp", "-r", str(self.staged), self.FSTAB], True),  # no flags
+            (["rm", self.CONF], False),  # mutate required
+            (["rm", "-f", "/swapfile"], True),  # no flags
+            (["rm", self.FSTAB], True),  # fstab is edited, never removed
+            (["rm", "/etc/passwd"], True),
+            (["rm", self.CONF, "/swapfile"], True),  # one target per call
+        ]
+        for argv, mutate in cases:
+            with self.subTest(argv=argv, mutate=mutate):
+                with self.assertRaises(CommandNotAllowedError):
+                    runner.run(argv, sudo=True, mutate=mutate)
+
+    def test_cp_rejected_without_configured_work_dir(self):
+        runner = self.make_runner(dry_run=True)
+        with self.assertRaises(CommandNotAllowedError):
+            runner.run(["cp", str(self.staged), self.CONF],
+                       sudo=True, mutate=True)
+
+
+class SimulateKeyNormalizationTests(RunnerTestCase):
+    """Staged-file paths are machine-specific; manifest keys stay portable
+    because simulate lookups rewrite the configured work dir to ./.work
+    (and downloads dir to ./downloads)."""
+
+    def test_cp_with_absolute_staged_path_matches_portable_key(self):
+        staging = self.work / "staging-work"
+        staging.mkdir()
+        staged = staging / "fstab.new"
+        staged.write_text("staged\n", encoding="utf-8")
+        fdir = self.make_fixture(commands={
+            "sudo cp ./.work/fstab.new /etc/fstab": {"returncode": 0},
+        })
+        runner = self.make_runner(fixture_dir=fdir, work_dir=staging)
+        result = runner.run(["cp", str(staged), "/etc/fstab"],
+                            sudo=True, mutate=True)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.mode, "simulate")
+
+
+class FileExistsTests(RunnerTestCase):
+    def test_real_checks_filesystem(self):
+        runner = self.make_runner()
+        present = self.work / "present.txt"
+        present.write_text("x\n", encoding="utf-8")
+        self.assertTrue(runner.file_exists(present))
+        self.assertFalse(runner.file_exists(self.work / "absent.txt"))
+
+    def test_simulate_checks_files_map_membership(self):
+        fdir = self.make_fixture(files={"/etc/fstab": "payload\n"})
+        runner = self.make_runner(fixture_dir=fdir)
+        self.assertTrue(runner.file_exists("/etc/fstab"))
+        self.assertFalse(runner.file_exists(
+            "/etc/sysctl.d/99-jetson-postboot.conf"))
+
+
 class RealModeTests(RunnerTestCase):
     def test_real_execution_goes_through_subprocess(self):
         runner = self.make_runner()
@@ -229,6 +326,19 @@ class RealModeTests(RunnerTestCase):
         self.assertTrue(result.executed)
         self.assertEqual(result.stdout, "payload")
         self.assertEqual(result.mode, "real")
+
+    def test_real_missing_binary_returns_127(self):
+        runner = self.make_runner()
+        with mock.patch.object(
+            runner_mod.subprocess, "run",
+            side_effect=FileNotFoundError(2, "No such file or directory", "nvcc"),
+        ):
+            result = runner.run(["nvcc", "--version"])
+        self.assertEqual(result.returncode, 127)
+        self.assertIn("nvcc", result.stderr)
+        self.assertIn("not found", result.stderr)
+        self.assertEqual(result.mode, "real")
+        self.assertFalse(result.executed)
 
     def test_sudo_prepended_in_real_mode(self):
         runner = self.make_runner()

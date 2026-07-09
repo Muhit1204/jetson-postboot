@@ -119,5 +119,6 @@ python3 postboot.py --simulate tests/fixtures/orin-nano-8gb
 python3 -m unittest discover -s tests -t .        # the test suite
 ```
 
-See `PLAN.md` for the roadmap, `GUARDRAILS.md` for the safety rules that
-bind every change, and `PROJECT_CONTEXT.md` for current status.
+Contributions are welcome. Every change must stay within the safety
+boundaries described in **What this tool will never do** above — those
+rules are non-negotiable and bind every code path.

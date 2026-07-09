@@ -1,10 +1,10 @@
 # Changelog
 
 All notable changes to jetson-postboot are recorded here. Dates are UTC.
-This project follows the phase plan in PLAN.md; the safety rules in
-GUARDRAILS.md bind every change.
+The project develops in phases behind a strict set of safety rules
+(summarised in the README) that bind every change.
 
-## [0.1.0] - unreleased (pending the fresh-clone hardware walkthrough)
+## [0.1.0] - 2026-07-09
 
 First working release: a read-only Jetson report plus two reversible,
 always-confirmed setup actions, all runnable on any machine via fixture

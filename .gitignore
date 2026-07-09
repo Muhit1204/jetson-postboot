@@ -9,3 +9,8 @@ downloads/
 # Python
 __pycache__/
 *.pyc
+
+# Internal planning/context docs - kept local, never published
+PROJECT_CONTEXT.md
+PLAN.md
+GUARDRAILS.md

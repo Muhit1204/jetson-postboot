@@ -14,3 +14,7 @@ __pycache__/
 PROJECT_CONTEXT.md
 PLAN.md
 GUARDRAILS.md
+
+# Local-only safety backup of the pre-rewrite history/docs - never publish
+PRE_REWRITE_BACKUP.md
+pre-rewrite-backup.bundle

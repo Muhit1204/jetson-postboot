@@ -2,9 +2,13 @@
 
 Compares the root the bootloader is configured to use (APPEND root= in
 /boot/extlinux/extlinux.conf) against the root actually mounted, and issues
-one of three verdicts. It never writes to /boot; on a mismatch it prints the
-exact suggested extlinux line and saves a copy of extlinux.conf into
-./backups/ for the user. A guard test rejects any mutate= keyword here.
+one of three verdicts. It also reads the UEFI boot order (efibootmgr) and
+warns when a removable-media entry (SD / MMC / USB) is still tried before
+the entry the board actually started from - the classic post-migration trap
+where a re-inserted SD card silently wins the next boot. It never writes to
+/boot or the firmware; on a mismatch it prints the exact suggested fix and
+saves a copy of extlinux.conf into ./backups/ for the user. A guard test
+rejects any mutate= keyword here.
 """
 
 import json
@@ -20,6 +24,9 @@ _MIGRATION_ADVISORY = (
     "v1 never migrates automatically; follow the JetsonHacks migration "
     "procedure (jetsonhacks.com, 'Jetson Orin Nano boot from NVMe') "
     "and re-run this tool afterwards.")
+# Firmware entry labels that identify removable / migration-source media.
+# Word-bounded so drive model strings ("WD Green SN3000") never match.
+_REMOVABLE_LABEL_RE = re.compile(r"\b(SD|MMC|eMMC|USB)\b", re.IGNORECASE)
 
 
 def parse_configured_root(text):
@@ -53,6 +60,45 @@ def suggested_append_line(append_line, mounted_device):
     """The APPEND line with only its root= token replaced."""
     return re.sub(r"\broot=\S+", "root={}".format(mounted_device),
                   append_line)
+
+
+def parse_efibootmgr(text):
+    """{'current': '0008', 'order': ['0008', ...], 'entries': {id: label}}
+    from efibootmgr output. Missing pieces come back as None / empty, so
+    callers can degrade to the plain reference listing."""
+    current = re.search(r"^BootCurrent:\s*([0-9A-Fa-f]{4})", text, re.MULTILINE)
+    order = re.search(r"^BootOrder:\s*(\S+)", text, re.MULTILINE)
+    entries = dict(re.findall(r"^Boot([0-9A-Fa-f]{4})\*?\s+(.+?)\s*$",
+                              text, re.MULTILINE))
+    return {
+        "current": current.group(1) if current else None,
+        "order": order.group(1).split(",") if order else [],
+        "entries": entries,
+    }
+
+
+def stale_entries_before_current(parsed):
+    """(id, label) pairs for removable-media entries (SD / MMC / USB) that
+    the saved boot order tries before the entry the board actually started
+    from (BootCurrent). Non-empty means a re-inserted migration-source card
+    would silently win the next boot."""
+    current = parsed["current"]
+    if current is None or current not in parsed["order"]:
+        return []
+    offenders = []
+    for boot_id in parsed["order"]:
+        if boot_id == current:
+            break
+        label = parsed["entries"].get(boot_id, "")
+        if _REMOVABLE_LABEL_RE.search(label):
+            offenders.append((boot_id, label))
+    return offenders
+
+
+def suggested_boot_order(parsed):
+    """The saved order with the entry actually booted moved to the front."""
+    current = parsed["current"]
+    return [current] + [b for b in parsed["order"] if b != current]
 
 
 def _append_line(text):
@@ -122,14 +168,53 @@ def check(runner, report, backups_dir=None):
 
 
 def _efibootmgr(runner, report):
-    """Include read-only efibootmgr output when the binary exists."""
+    """Boot-order verdict from read-only efibootmgr output (PLAN 6.5).
+
+    After an SD-to-NVMe migration the firmware's saved boot order often
+    still tries the SD card first; the board then silently starts the old
+    system whenever a card is inserted. This warns about that layout and
+    prints the exact manual fix. The tool itself never changes the boot
+    order: the runner allowlist rejects efibootmgr with any argument
+    beyond -v, so this stays Tier 3 read-only forever.
+    """
     if runner.run(["which", "efibootmgr"]).returncode != 0:
         return
     result = runner.run(["efibootmgr"])
-    if result.returncode == 0 and result.stdout.strip():
-        head = result.stdout.strip().splitlines()
-        report.add(LEVEL_PASS, "boot",
-                   "boot menu entries (from efibootmgr, read-only - shown "
-                   "for reference, nothing here needs changing): {}".format(
-                       head[0]),
-                   details="\n".join(head[1:6]))
+    if result.returncode != 0 or not result.stdout.strip():
+        return
+    head = result.stdout.strip().splitlines()
+
+    parsed = parse_efibootmgr(result.stdout)
+    offenders = stale_entries_before_current(parsed)
+    if offenders:
+        offender_id, offender_label = offenders[0]
+        current_label = parsed["entries"].get(parsed["current"], "")
+        suggested = ",".join(suggested_boot_order(parsed))
+        details = [
+            "saved startup order: {}".format(",".join(parsed["order"])),
+            "  tries {} ({}) before {} ({})".format(
+                offender_id, offender_label,
+                parsed["current"], current_label),
+            "fix, option 1 - one command (this tool never runs it for you):",
+            "  sudo efibootmgr -o {}".format(suggested),
+            "fix, option 2 - in the startup menu: press Esc while the board",
+            "  starts, then Boot Maintenance Manager > Boot Options >",
+            "  Change Boot Order, and move '{}' to the top.".format(
+                current_label),
+        ]
+        report.add(
+            LEVEL_WARN, "boot",
+            "the board started from '{}' this time, but the saved startup "
+            "order still tries '{}' first. After migrating from an SD card, "
+            "change the boot order so the new drive comes first - otherwise "
+            "the board will silently start the old system whenever that "
+            "card or stick is inserted.".format(current_label,
+                                                offender_label),
+            details="\n".join(details))
+        return
+
+    report.add(LEVEL_PASS, "boot",
+               "boot menu entries (from efibootmgr, read-only - shown "
+               "for reference, nothing here needs changing): {}".format(
+                   head[0]),
+               details="\n".join(head[1:6]))

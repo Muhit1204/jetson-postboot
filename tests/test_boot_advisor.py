@@ -1,11 +1,14 @@
 """Tests for modules/boot_advisor.py (Tier 3, read-only forever).
 
-Three fixture sets drive the three verdicts (PLAN 6.5 acceptance):
+Four fixture sets drive the verdicts (PLAN 6.5 acceptance):
 - orin-nano-8gb (captured): configured root matches mounted root -> (a).
 - orin-nano-8gb-root-on-sd (derived): root on SD, larger NVMe idle -> (b),
   migration advisory.
 - orin-nano-8gb-root-mismatch (derived): configured UUID resolves nowhere
   -> (c), suggested extlinux line + extlinux.conf copied to backups.
+- orin-nano-8gb-bootorder-stale (derived): root on NVMe but the firmware
+  boot order still tries an SD entry first -> stale-boot-order WARN with
+  the exact efibootmgr -o line, nothing executed.
 tests/test_guards.py asserts this module never passes mutate= to the runner.
 """
 
@@ -54,6 +57,59 @@ class SuggestedLineTests(unittest.TestCase):
         self.assertIn("root=/dev/nvme0n1p1", suggested)
         self.assertNotIn("dead-beef", suggested)
         self.assertIn("rootfstype=ext4", suggested)
+
+
+STALE_EFIBOOTMGR = """\
+BootCurrent: 0008
+Timeout: 5 seconds
+BootOrder: 0001,0008,0004
+Boot0000* Enter Setup
+Boot0001* UEFI SD Device
+Boot0004* UEFI HTTPv4 (MAC:4CBB47C8BEB6)
+Boot0008* UEFI WD Green SN3000 500GB 254587801140 1
+"""
+
+
+class EfibootmgrParserTests(unittest.TestCase):
+    def test_captured_fixture_parses(self):
+        parsed = boot_advisor.parse_efibootmgr(fixture_text("efibootmgr.txt"))
+        self.assertEqual(parsed["current"], "0008")
+        self.assertEqual(parsed["order"][0], "0008")
+        self.assertEqual(len(parsed["order"]), 8)
+        self.assertIn("WD Green SN3000", parsed["entries"]["0008"])
+
+    def test_missing_pieces_degrade_to_none_and_empty(self):
+        parsed = boot_advisor.parse_efibootmgr("Timeout: 5 seconds\n")
+        self.assertIsNone(parsed["current"])
+        self.assertEqual(parsed["order"], [])
+        self.assertEqual(parsed["entries"], {})
+
+    def test_captured_fixture_has_no_stale_entries(self):
+        # BootCurrent leads BootOrder on the captured board: healthy.
+        parsed = boot_advisor.parse_efibootmgr(fixture_text("efibootmgr.txt"))
+        self.assertEqual(boot_advisor.stale_entries_before_current(parsed), [])
+
+    def test_sd_entry_before_current_is_detected(self):
+        parsed = boot_advisor.parse_efibootmgr(STALE_EFIBOOTMGR)
+        self.assertEqual(boot_advisor.stale_entries_before_current(parsed),
+                         [("0001", "UEFI SD Device")])
+
+    def test_non_removable_entries_before_current_are_ignored(self):
+        # PXE/HTTP network entries time out and fall through; only SD/MMC/USB
+        # media can silently boot a stale system.
+        text = STALE_EFIBOOTMGR.replace("0001,0008,0004", "0004,0008,0001")
+        parsed = boot_advisor.parse_efibootmgr(text)
+        self.assertEqual(boot_advisor.stale_entries_before_current(parsed), [])
+
+    def test_drive_model_letters_do_not_false_match(self):
+        # "WD Green SN3000" must not trip the SD/MMC/USB label matcher.
+        self.assertIsNone(boot_advisor._REMOVABLE_LABEL_RE.search(
+            "UEFI WD Green SN3000 500GB 254587801140 1"))
+
+    def test_suggested_order_moves_current_first(self):
+        parsed = boot_advisor.parse_efibootmgr(STALE_EFIBOOTMGR)
+        self.assertEqual(boot_advisor.suggested_boot_order(parsed),
+                         ["0008", "0001", "0004"])
 
 
 class ResolveTests(unittest.TestCase):
@@ -139,11 +195,29 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(len(copies), 1)
         self.assertIn("99999999-aaaa", copies[0].read_text(encoding="utf-8"))
 
+    def test_stale_boot_order_warns_with_exact_fix(self):
+        report, _work = self.run_check(
+            FIXTURES / "orin-nano-8gb-bootorder-stale")
+        text = report.render_text()
+        warns = [f for f in report.findings if f.level == LEVEL_WARN]
+        stale = [f for f in warns if "startup order" in f.message]
+        self.assertEqual(len(stale), 1, text)
+        self.assertIn("UEFI SD Device", stale[0].message)
+        details = stale[0].details or ""
+        # exact manual fix: current entry moved to the front, order preserved
+        self.assertIn("sudo efibootmgr -o "
+                      "0008,0001,0004,0003,0002,0005,0000,0006,0007", details)
+        self.assertIn("never runs it", details)
+        self.assertIn("Change Boot Order", details)
+        # verdict (a) still passes on this fixture: root really is on NVMe
+        self.assertIn("matches", text)
+
     def test_verdicts_never_go_below_warn(self):
         # Tier 3: advisory findings are WARN at most, never ACTION, because
         # the tool offers no apply path for boot configuration.
         for fixture in (BASE, FIXTURES / "orin-nano-8gb-root-on-sd",
-                        FIXTURES / "orin-nano-8gb-root-mismatch"):
+                        FIXTURES / "orin-nano-8gb-root-mismatch",
+                        FIXTURES / "orin-nano-8gb-bootorder-stale"):
             report, _work = self.run_check(fixture)
             for finding in report.findings:
                 self.assertIn(finding.level, (LEVEL_PASS, LEVEL_WARN),

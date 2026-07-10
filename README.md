@@ -25,6 +25,13 @@ before it is ready for AI work. This tool helps with four things:
    a chat model that fits your board's memory.
 4. **Boot setup.** It checks that your board is set to start correctly and,
    if something looks off, prints the exact fix for you to apply by hand.
+   This includes the classic post-migration trap: after you move your
+   system from an SD card to an SSD, the board's saved startup order can
+   still try the SD card first — so an old card left (or re-inserted) in
+   the slot silently boots the old system. The tool spots this and shows
+   you exactly how to put the new drive first, both as a single command
+   and as steps in the startup menu. *(It shows the fix; it never changes
+   the boot order itself.)*
 
 You do **not** need to be technical to use it. Every line it prints is
 written to be understood without a computer-science background, and it
@@ -95,7 +102,9 @@ happens. Swap changes are recorded so `--undo swap` can put them back.
 Your safety comes first, so some things are permanently off-limits — no
 confirmation can override them:
 
-- No flashing, firmware, QSPI, or UEFI changes.
+- No flashing, firmware, QSPI, or UEFI changes — including the boot order:
+  a stale one is reported with the exact `efibootmgr` command and the
+  startup-menu steps for you to apply yourself.
 - No writing to `/boot` or `extlinux.conf` (boot problems are reported with
   the exact manual fix instead).
 - No partition or filesystem changes of any kind (an undersized cloned disk

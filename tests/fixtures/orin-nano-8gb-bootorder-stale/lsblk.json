@@ -1,0 +1,183 @@
+{
+   "blockdevices": [
+      {
+         "name": "loop0",
+         "size": 4096,
+         "type": "loop",
+         "mountpoint": "/snap/bare/5",
+         "fstype": "squashfs",
+         "pttype": null
+      },{
+         "name": "loop2",
+         "size": 72310784,
+         "type": "loop",
+         "mountpoint": "/snap/core22/2412",
+         "fstype": "squashfs",
+         "pttype": null
+      },{
+         "name": "loop3",
+         "size": 64864256,
+         "type": "loop",
+         "mountpoint": "/snap/core24/1644",
+         "fstype": "squashfs",
+         "pttype": null
+      },{
+         "name": "loop4",
+         "size": 50196480,
+         "type": "loop",
+         "mountpoint": "/snap/cups/1198",
+         "fstype": "squashfs",
+         "pttype": null
+      },{
+         "name": "loop5",
+         "size": 579809280,
+         "type": "loop",
+         "mountpoint": "/snap/gnome-46-2404/154",
+         "fstype": "squashfs",
+         "pttype": null
+      },{
+         "name": "loop6",
+         "size": 96141312,
+         "type": "loop",
+         "mountpoint": "/snap/gtk-common-themes/1535",
+         "fstype": "squashfs",
+         "pttype": null
+      },{
+         "name": "loop7",
+         "size": 183046144,
+         "type": "loop",
+         "mountpoint": "/snap/mesa-2404/1166",
+         "fstype": "squashfs",
+         "pttype": null
+      },{
+         "name": "loop8",
+         "size": 44703744,
+         "type": "loop",
+         "mountpoint": "/snap/snapd/26869",
+         "fstype": "squashfs",
+         "pttype": null
+      },{
+         "name": "loop9",
+         "size": 16777216,
+         "type": "loop",
+         "mountpoint": null,
+         "fstype": "vfat",
+         "pttype": null
+      },{
+         "name": "nvme0n1",
+         "size": 500107862016,
+         "type": "disk",
+         "mountpoint": null,
+         "fstype": null,
+         "pttype": "gpt",
+         "children": [
+            {
+               "name": "nvme0n1p1",
+               "size": 498542313472,
+               "type": "part",
+               "mountpoint": "/",
+               "fstype": "ext4",
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p2",
+               "size": 134217728,
+               "type": "part",
+               "mountpoint": null,
+               "fstype": null,
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p3",
+               "size": 786432,
+               "type": "part",
+               "mountpoint": null,
+               "fstype": null,
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p4",
+               "size": 33161216,
+               "type": "part",
+               "mountpoint": null,
+               "fstype": null,
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p5",
+               "size": 134217728,
+               "type": "part",
+               "mountpoint": null,
+               "fstype": null,
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p6",
+               "size": 786432,
+               "type": "part",
+               "mountpoint": null,
+               "fstype": null,
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p7",
+               "size": 33161216,
+               "type": "part",
+               "mountpoint": null,
+               "fstype": null,
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p8",
+               "size": 83886080,
+               "type": "part",
+               "mountpoint": null,
+               "fstype": null,
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p9",
+               "size": 524288,
+               "type": "part",
+               "mountpoint": null,
+               "fstype": null,
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p10",
+               "size": 67108864,
+               "type": "part",
+               "mountpoint": "/boot/efi",
+               "fstype": "vfat",
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p11",
+               "size": 83886080,
+               "type": "part",
+               "mountpoint": null,
+               "fstype": null,
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p12",
+               "size": 524288,
+               "type": "part",
+               "mountpoint": null,
+               "fstype": null,
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p13",
+               "size": 67108864,
+               "type": "part",
+               "mountpoint": null,
+               "fstype": null,
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p14",
+               "size": 419430400,
+               "type": "part",
+               "mountpoint": null,
+               "fstype": null,
+               "pttype": "gpt"
+            },{
+               "name": "nvme0n1p15",
+               "size": 502792192,
+               "type": "part",
+               "mountpoint": null,
+               "fstype": null,
+               "pttype": "gpt"
+            }
+         ]
+      }
+   ]
+}

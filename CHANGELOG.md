@@ -4,6 +4,22 @@ All notable changes to jetson-postboot are recorded here. Dates are UTC.
 The project develops in phases behind a strict set of safety rules
 (summarised in the README) that bind every change.
 
+## [0.2.0] - 2026-07-10
+
+### Added
+
+- **Stale boot-order warning (boot advisor, Tier 3, advice only).** The
+  boot advisor now parses the UEFI boot order (`efibootmgr`, read-only)
+  and warns when a removable-media entry (SD / MMC / USB) is still tried
+  before the entry the board actually started from — the classic trap
+  after an SD-to-NVMe migration, where a re-inserted card silently boots
+  the old system. The warning prints the exact `sudo efibootmgr -o ...`
+  command and the startup-menu steps; the tool never changes the boot
+  order itself (the command gateway rejects `efibootmgr` with any
+  argument beyond `-v`).
+- Derived fixture `orin-nano-8gb-bootorder-stale` exercising the new
+  warning end to end.
+
 ## [0.1.0] - 2026-07-09
 
 First working release: a read-only Jetson report plus two reversible,
